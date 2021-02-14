@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+
+<script id="vertex-shader" type="x-shader/x-vertex">
+
+attribute vec4 vPosition;
+attribute vec3 vNormal;
+varying vec3 L, N, V;
+
+
+uniform mat4 modelViewMatrix;
+uniform mat4 projectionMatrix;
+
+uniform vec4 lightDirection;
+
+attribute vec2 vTexCoords;
+// we take varying variable because in vertex shader,rasterizer makes interpolation to the texture coordinates.
+varying vec2 fTexCoords; // modify fTexCoords in fragment shader
+
+
+void main()
+{
+	//scaling texture coordinates with 1 --> 
+	//texture koordinatları s ve t min 0 max 1 olduğu için [0,1] aralığında formatlamaya çalışıyoruz.
+	fTexCoords = vTexCoords;
+
+	// eye coordinates (camera direction)
+	vec3 pos = -(modelViewMatrix * vPosition).xyz;
+	
+	// fixed lightDirection
+	// fixed light position (same for all points)
+	// with the normalization we get unit vectors. Light(L) vector --> used in diffuse calculation
+	L = normalize(-lightDirection.xyz);
+	// eye vector
+	V = normalize(-pos);
+	
+	vec4 NN = vec4(vNormal, 0);
+	
+	//transform vertex normal into eye coordinates
+    // rotated normal version that we sent 
+	N = normalize(	(modelViewMatrix*NN).xyz);
+
+
+    gl_Position = projectionMatrix * modelViewMatrix * vPosition;
+
+}
+
+
+/*	In Phong shading, from the vertex shader, you will need to pass normals for each vertex as a varying variable. 
+They will be interpolated by rasterizer and you can use the incoming normal in the fragment shader to finalize computing the color. 
+So, you need to do your last light calculations in the fragment shader	*/
+
+</script>
+
+<script id="fragment-shader" type="x-shader/x-fragment">
+
+precision mediump float;
+
+varying vec3 L, N, V;
+
+uniform vec4 ambientProduct, diffuseProduct, specularProduct;
+// it represents specular exponent which is n
+uniform float shininess;
+
+varying vec2 fTexCoords;
+// create 2d sampler variable names as texMap
+uniform sampler2D texMap;
+
+
+void main()
+{
+
+	//compute terms in the illumination equation
+	// ambientProduct = ka.Ia
+	vec4 ambient = ambientProduct;
+	
+	// diffuseProduct = Il.kd
+	float dotLN = dot(L, N);
+	float diffuseCosAngle = max(dotLN, 0.0);
+	// diffuse = Il.kd.(N.L) --> if N.L <= 0 then there is no diffuse component
+	vec4 diffuse = diffuseCosAngle * diffuseProduct;
+	
+	
+	// halfway vector (Light vektörüyle viewer vektörünü ortalayan vektör) --> used in specular calculation
+	vec3 H = normalize(L+V);
+	// specularProduct = Il.ks
+	// take power of the shininess (specular exponent)
+	float specularCosAngle = pow( max(dot(N, H), 0.0), shininess);
+	// specular = Il.ks.(N.H) --> if N.H <= 0 then there is no specular component
+	vec4 specular = specularCosAngle * specularProduct;
+	
+	// if the light is not in front of that point (not have specular component), set up spec component to zero.
+	if( dotLN < 0.0){
+		//ambient = vec4(0.0, 1.0, 0.0, 1.0);
+		//diffuse = vec4(0.0, 0.0, 0.0, 1.0);
+		specular = vec4(0.0, 0.0, 0.0, 1.0);
+	}
+	
+	// color of that point will be addition of ambient, diffuse and specular
+	vec4 fColor = ambient + diffuse + specular;
+	
+	fColor.a = 1.0;
+	
+    //fColor'daki renk değeriyle texture'daki renk değerini çarparak birleştir
+    gl_FragColor = fColor * texture2D(texMap, fTexCoords);
+}
+</script>
+
+<p> </p>
+<button id = "XButton">Rotate around X</button>
+<button id = "YButton">Rotate around Y</button>
+<button id = "ZButton">Rotate around Z</button>
+<p> </p>
+<!--button id = "Button4">Increase Subdivisions</button>
+<button id = "Button5">Decrease Subdivisions</button-->
+
+<script src="initShaders.js"></script>
+<script src="MV.js"></script>
+<script src="webgl-utils.js"></script>
+<script src="3D.js"></script>
+
+<body>
+<canvas id="gl-canvas" width="575" height="575">
+Oops ... your browser doesn't support the HTML5 canvas element
+</canvas>
+</body>
+</html>
